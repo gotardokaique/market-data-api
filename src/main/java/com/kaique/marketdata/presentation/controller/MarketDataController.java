@@ -16,8 +16,9 @@ import org.springframework.web.bind.annotation.*;
  *
  * Exemplos:
  *   GET /market/CRYPTO/bitcoin       → Preço do Bitcoin via CoinGecko
- *   GET /market/STOCK/PETR4.SA       → Preço da Petrobras via Yahoo Finance
- *   GET /market/FII/HGLG11.SA        → Preço do HGLG11 via Yahoo Finance
+ *   GET /market/STOCK/PETR4.SA       → Preço da Petrobras via Brapi
+ *   GET /market/FII/HGLG11.SA        → Preço do HGLG11 via Brapi
+ *   GET /market/STOCK/IBM            → Preço da IBM via Alpha Vantage
  */
 @RestController
 @RequestMapping("/market")
