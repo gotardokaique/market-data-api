@@ -1,0 +1,19 @@
+# ========================= Maven =========================
+target/
+!**/src/main/**/target/ **/src/test/**/target/
+# Maven Wrapper
+.mvn/wrapper/maven-wrapper.jar
+# ========================= Spring Boot =========================
+HELP.md
+# ========================= Eclipse / STS =========================
+.metadata/ .apt_generated .classpath .factorypath .project .settings/ .springBeans .sts4-cache
+# ========================= IntelliJ IDEA =========================
+.idea/ *.iws *.iml *.ipr out/
+# ========================= VS Code =========================
+.vscode/
+# ========================= OS files =========================
+.DS_Store Thumbs.db
+# ========================= Logs =========================
+*.log
+# ========================= Environment =========================
+.env .env.local
