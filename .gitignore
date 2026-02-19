@@ -30,7 +30,6 @@ bin/
 *.iml
 *.ipr
 out/
-cmake-build-*/
 
 # ========================= VS Code / Antigravity =========================
 .vscode/
@@ -40,13 +39,7 @@ cmake-build-*/
 # ========================= OS files =========================
 .DS_Store
 Thumbs.db
-*.swp
-
-# ========================= Logs =========================
-*.log
-logs/
 
 # ========================= Environment =========================
 .env
 .env.local
-.env.*.local
