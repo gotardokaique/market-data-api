@@ -12,7 +12,7 @@
 	<artifactId>market-data-api</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>market-data-api</name>
-	<description>Market Data API with multi-provider integration (CoinGecko, Yahoo Finance, Alpha Vantage)</description>
+	<description>Market Data API with multi-provider integration (CoinGecko, Brapi)</description>
 	<url/>
 	<licenses>
 		<license/>
@@ -38,6 +38,11 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 
 		<dependency>
