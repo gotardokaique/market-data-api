@@ -2,23 +2,27 @@ package com.kaique.marketdata.presentation.controller;
 
 import com.kaique.marketdata.application.service.MarketDataService;
 import com.kaique.marketdata.domain.enums.MarketType;
+import com.kaique.marketdata.domain.enums.TimeRange;
+import com.kaique.marketdata.domain.model.Candle;
 import com.kaique.marketdata.domain.model.MarketData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * Controller REST para consultas de dados de mercado.
  *
- * Endpoints:
- *   GET /market/{type}/{symbol}
+/**
+ * Controller REST para consultas de dados de mercado.
  *
  * Exemplos:
- *   GET /market/CRYPTO/bitcoin       → Preço do Bitcoin via CoinGecko
- *   GET /market/STOCK/PETR4.SA       → Preço da Petrobras via Brapi
- *   GET /market/FII/HGLG11.SA        → Preço do HGLG11 via Brapi
- *   GET /market/STOCK/IBM            → Preço da IBM via Alpha Vantage
+ *   GET /market/CRYPTO/bitcoin
+ *   GET /market/STOCK/PETR4.SA
+ *   GET /market/STOCK/IBM
+ *   GET /market/STOCK/PETR4.SA/history?range=1m
  */
 @RestController
 @RequestMapping("/market")
@@ -43,5 +47,20 @@ public class MarketDataController {
         MarketData data = marketDataService.getCurrentPrice(marketType, symbol);
 
         return ResponseEntity.ok(data);
+    }
+
+    @GetMapping("/{type}/{symbol}/history")
+    public ResponseEntity<List<Candle>> getHistory(
+            @PathVariable("type") String type,
+            @PathVariable("symbol") String symbol,
+            @RequestParam(value = "range", defaultValue = "1m") String range) {
+
+        log.info("GET /market/{}/{}/history?range={}", type, symbol, range);
+
+        MarketType marketType = MarketType.valueOf(type.toUpperCase());
+        TimeRange timeRange = TimeRange.fromString(range);
+        List<Candle> history = marketDataService.getHistory(marketType, symbol, timeRange);
+
+        return ResponseEntity.ok(history);
     }
 }

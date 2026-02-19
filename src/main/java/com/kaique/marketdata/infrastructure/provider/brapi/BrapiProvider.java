@@ -2,7 +2,9 @@ package com.kaique.marketdata.infrastructure.provider.brapi;
 
 import com.kaique.marketdata.domain.enums.MarketType;
 import com.kaique.marketdata.domain.enums.ProviderType;
+import com.kaique.marketdata.domain.enums.TimeRange;
 import com.kaique.marketdata.domain.exception.ProviderException;
+import com.kaique.marketdata.domain.model.Candle;
 import com.kaique.marketdata.domain.model.MarketData;
 import com.kaique.marketdata.infrastructure.provider.MarketDataProvider;
 import org.slf4j.Logger;
@@ -18,20 +20,14 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 
 /**
- * Implementação do provider para a API Brapi (https://brapi.dev).
- * Responsável por buscar dados de ações (STOCK) e fundos imobiliários (FII) da B3.
+ * Provider para a API Brapi (https://brapi.dev).
+ * Endpoint: https://brapi.dev/api/quote/{symbol}
  *
- * Endpoint: GET https://brapi.dev/api/quote/{symbol}?token={token}
- *
- * A Brapi tem PRIORIDADE sobre o Yahoo Finance para ativos brasileiros porque:
- * - JSON limpo e estruturado
- * - Sem necessidade de User-Agent ou interceptores
- * - Rate limiting razoável com token
- *
- * A anotação @Order(1) garante que este provider será selecionado ANTES do
- * YahooFinanceProvider (@Order(2)) quando ambos suportam o mesmo MarketType.
+ * @Order(1) garante prioridade sobre Alpha Vantage.
  */
 @Component
 @Order(1)
@@ -52,33 +48,28 @@ public class BrapiProvider implements MarketDataProvider {
 
     @Override
     public MarketData fetchCurrentPrice(String symbol) {
-        // Remove o ".SA" se o usuário enviar — a Brapi usa ticker sem sufixo
-        String cleanSymbol = symbol.toUpperCase().replace(".SA", "");
+        String cleanSymbol = cleanSymbol(symbol);
         String url = BASE_URL + cleanSymbol + "?token=" + token;
 
         log.info("[{}] Buscando preço para símbolo: {}", PROVIDER_NAME, cleanSymbol);
 
         try {
             BrapiResponse response = restTemplate.getForObject(URI.create(url), BrapiResponse.class);
-
-            if (response == null || response.results() == null || response.results().isEmpty()) {
-                throw new ProviderException(PROVIDER_NAME,
-                        "Resposta nula ou sem resultados para o símbolo: " + cleanSymbol);
-            }
+            validateResponse(response, cleanSymbol);
 
             BrapiResponse.BrapiQuote quote = response.results().get(0);
             return mapToMarketData(quote, cleanSymbol);
 
+        } catch (ProviderException e) {
+            throw e;
         } catch (HttpClientErrorException e) {
             log.error("[{}] Erro 4xx ao buscar {}: {} - {}", PROVIDER_NAME, cleanSymbol, e.getStatusCode(), e.getMessage());
             throw new ProviderException(PROVIDER_NAME,
                     "Erro do cliente ao buscar " + cleanSymbol + ": " + e.getStatusCode(), e);
-
         } catch (HttpServerErrorException e) {
             log.error("[{}] Erro 5xx ao buscar {}: {} - {}", PROVIDER_NAME, cleanSymbol, e.getStatusCode(), e.getMessage());
             throw new ProviderException(PROVIDER_NAME,
                     "Erro do servidor ao buscar " + cleanSymbol + ": " + e.getStatusCode(), e);
-
         } catch (RestClientException e) {
             log.error("[{}] Erro de conexão ao buscar {}: {}", PROVIDER_NAME, cleanSymbol, e.getMessage());
             throw new ProviderException(PROVIDER_NAME,
@@ -87,13 +78,86 @@ public class BrapiProvider implements MarketDataProvider {
     }
 
     @Override
+    public List<Candle> fetchHistory(String symbol, TimeRange timeRange) {
+        String cleanSymbol = cleanSymbol(symbol);
+        String url = BASE_URL + cleanSymbol
+                + "?range=" + timeRange.getBrapiRange()
+                + "&interval=" + timeRange.getBrapiInterval()
+                + "&token=" + token;
+
+        log.info("[{}] Buscando histórico para {} (range={}, interval={})",
+                PROVIDER_NAME, cleanSymbol, timeRange.getBrapiRange(), timeRange.getBrapiInterval());
+
+        try {
+            BrapiResponse response = restTemplate.getForObject(URI.create(url), BrapiResponse.class);
+            validateResponse(response, cleanSymbol);
+
+            BrapiResponse.BrapiQuote quote = response.results().get(0);
+
+            if (quote.historicalDataPrice() == null || quote.historicalDataPrice().isEmpty()) {
+                log.warn("[{}] Nenhum dado histórico retornado para {}", PROVIDER_NAME, cleanSymbol);
+                return Collections.emptyList();
+            }
+
+            List<Candle> candles = quote.historicalDataPrice().stream()
+                    .map(this::mapToCandle)
+                    .sorted((a, b) -> Long.compare(a.timestamp(), b.timestamp()))
+                    .toList();
+
+            log.info("[{}] Retornados {} candles para {} (range={})",
+                    PROVIDER_NAME, candles.size(), cleanSymbol, timeRange.getBrapiRange());
+
+            return candles;
+
+        } catch (ProviderException e) {
+            throw e;
+        } catch (HttpClientErrorException e) {
+            log.error("[{}] Erro 4xx ao buscar histórico de {}: {}", PROVIDER_NAME, cleanSymbol, e.getMessage());
+            throw new ProviderException(PROVIDER_NAME,
+                    "Erro do cliente ao buscar histórico de " + cleanSymbol + ": " + e.getStatusCode(), e);
+        } catch (HttpServerErrorException e) {
+            log.error("[{}] Erro 5xx ao buscar histórico de {}: {}", PROVIDER_NAME, cleanSymbol, e.getMessage());
+            throw new ProviderException(PROVIDER_NAME,
+                    "Erro do servidor ao buscar histórico de " + cleanSymbol + ": " + e.getStatusCode(), e);
+        } catch (RestClientException e) {
+            log.error("[{}] Erro de conexão ao buscar histórico de {}: {}", PROVIDER_NAME, cleanSymbol, e.getMessage());
+            throw new ProviderException(PROVIDER_NAME,
+                    "Falha na conexão ao buscar histórico de " + cleanSymbol, e);
+        }
+    }
+
+    @Override
     public boolean supports(MarketType marketType) {
         return marketType == MarketType.STOCK || marketType == MarketType.FII;
     }
 
+    // ========== Métodos privados ==========
+
+    private String cleanSymbol(String symbol) {
+        return symbol.toUpperCase().replace(".SA", "");
+    }
+
+    private void validateResponse(BrapiResponse response, String symbol) {
+        if (response == null || response.results() == null || response.results().isEmpty()) {
+            throw new ProviderException(PROVIDER_NAME,
+                    "Resposta nula ou sem resultados para o símbolo: " + symbol);
+        }
+    }
+
     /**
-     * Converte o quote da Brapi para o objeto de domínio MarketData.
+     * Converte historico Brapi (date=epoch seconds) para Candle.
      */
+    private Candle mapToCandle(BrapiResponse.HistoricalDataPrice data) {
+        return new Candle(
+                data.date(),
+                data.open() != null ? data.open() : BigDecimal.ZERO,
+                data.high() != null ? data.high() : BigDecimal.ZERO,
+                data.low() != null ? data.low() : BigDecimal.ZERO,
+                data.close() != null ? data.close() : BigDecimal.ZERO,
+                data.volume() != null ? data.volume() : BigDecimal.ZERO
+        );
+    }
+
     private MarketData mapToMarketData(BrapiResponse.BrapiQuote quote, String originalSymbol) {
         MarketType detectedType = detectMarketType(originalSymbol);
 
@@ -111,10 +175,6 @@ public class BrapiProvider implements MarketDataProvider {
         );
     }
 
-    /**
-     * Detecta se um símbolo brasileiro é FII ou STOCK.
-     * FIIs da B3 terminam com "11" (ex: HGLG11, MXRF11, XPML11).
-     */
     private MarketType detectMarketType(String symbol) {
         String upper = symbol.toUpperCase().replace(".SA", "");
         if (upper.matches("^[A-Z]{4}11$")) {
