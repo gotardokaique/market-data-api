@@ -47,7 +47,7 @@ public class BrapiProvider implements MarketDataProvider {
     public BrapiProvider(RestTemplate restTemplate,
                          @Value("${brapi.token}") String token) {
         this.restTemplate = restTemplate;
-        this.token = token;
+        this.token = token.trim();
     }
 
     @Override
